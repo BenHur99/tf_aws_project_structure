@@ -1,0 +1,43 @@
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Terraform plan files
+*.tfplan
+
+# Terraform variable files (sensitive)
+*.tfvars
+*.tfvars.json
+!terraform.tfvars     # keep default tfvars committed if needed
+
+# Backend config override
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# .terraform directory
+.terraform/
+.terraform.lock.hcl
+
+# Local execution artifacts
+*.log
+*.bak
+
+# Editor / OS / CI files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# GitHub Actions artifacts (optional)
+.github/workflows/*.log
+
+# Node/CI/CD temp files
+node_modules/
+dist/
+coverage/

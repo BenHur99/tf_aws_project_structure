@@ -1,0 +1,141 @@
+name: Terraform CI/CD for Multi-Layer Infra
+
+on:
+  push:
+    paths:
+      - 'terraform/clients/**'
+
+env:
+  TF_VERSION: 1.7.5
+  AZURE_STORAGE_ACCOUNT: tfstateclienta
+  RESOURCE_GROUP: rg-terraform-backend
+  CONTAINER_NAME: tfstate
+  REGION: eastus
+
+jobs:
+  detect-changes:
+    name: Detect Changed Layers
+    runs-on: ubuntu-latest
+    outputs:
+      networking_changed: ${{ steps.set.outputs.networking }}
+      security_changed: ${{ steps.set.outputs.security }}
+      compute_changed: ${{ steps.set.outputs.compute }}
+      loadbalancing_changed: ${{ steps.set.outputs.loadbalancing }}
+      data_changed: ${{ steps.set.outputs.data }}
+      dns_changed: ${{ steps.set.outputs.dns }}
+    steps:
+      - uses: actions/checkout@v3
+      - id: set
+        name: Identify layer changes
+        run: |
+          git fetch origin main
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+
+          echo "networking=false" >> $GITHUB_OUTPUT
+          echo "security=false" >> $GITHUB_OUTPUT
+          echo "compute=false" >> $GITHUB_OUTPUT
+          echo "loadbalancing=false" >> $GITHUB_OUTPUT
+          echo "data=false" >> $GITHUB_OUTPUT
+          echo "dns=false" >> $GITHUB_OUTPUT
+
+          for dir in networking security compute loadbalancing data dns; do
+            if echo "$CHANGED" | grep -q "$dir"; then
+              echo "$dir=true" >> $GITHUB_OUTPUT
+            fi
+          done
+
+  deploy-networking:
+    if: needs.detect-changes.outputs.networking_changed == 'true'
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Apply Networking
+        working-directory: terraform/clients/client-a/dev/networking
+        run: |
+          terraform init -backend-config=backend.tf
+          terraform plan -var-file=terraform.tfvars
+          terraform apply -auto-approve -var-file=terraform.tfvars
+
+  deploy-security:
+    if: needs.detect-changes.outputs.security_changed == 'true'
+    needs: [detect-changes, deploy-networking]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Apply Security
+        working-directory: terraform/clients/client-a/dev/security
+        run: |
+          terraform init -backend-config=backend.tf
+          terraform plan -var-file=terraform.tfvars
+          terraform apply -auto-approve -var-file=terraform.tfvars
+
+  deploy-compute:
+    if: needs.detect-changes.outputs.compute_changed == 'true'
+    needs: [deploy-networking, deploy-security]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Apply Compute
+        working-directory: terraform/clients/client-a/dev/compute
+        run: |
+          terraform init -backend-config=backend.tf
+          terraform plan -var-file=terraform.tfvars
+          terraform apply -auto-approve -var-file=terraform.tfvars
+
+  deploy-loadbalancing:
+    if: needs.detect-changes.outputs.loadbalancing_changed == 'true'
+    needs: [deploy-networking, deploy-compute]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Apply Load Balancing
+        working-directory: terraform/clients/client-a/dev/loadbalancing
+        run: |
+          terraform init -backend-config=backend.tf
+          terraform plan -var-file=terraform.tfvars
+          terraform apply -auto-approve -var-file=terraform.tfvars
+
+  deploy-data:
+    if: needs.detect-changes.outputs.data_changed == 'true'
+    needs: [deploy-networking, deploy-security]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Apply Data
+        working-directory: terraform/clients/client-a/dev/data
+        run: |
+          terraform init -backend-config=backend.tf
+          terraform plan -var-file=terraform.tfvars
+          terraform apply -auto-approve -var-file=terraform.tfvars
+
+  deploy-dns:
+    if: needs.detect-changes.outputs.dns_changed == 'true'
+    needs: [deploy-loadbalancing]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Apply DNS
+        working-directory: terraform/clients/client-a/dev/dns
+        run: |
+          terraform init -backend-config=backend.tf
+          terraform plan -var-file=terraform.tfvars
+          terraform apply -auto-approve -var-file=terraform.tfvars
