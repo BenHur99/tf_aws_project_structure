@@ -1,0 +1,1 @@
+# terraform.tfvars for platform

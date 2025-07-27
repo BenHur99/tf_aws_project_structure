@@ -10,7 +10,7 @@ crash.*.log
 *.tfplan
 
 # Terraform variable files (sensitive)
-*.tfvars
+# *.tfvars
 *.tfvars.json
 !terraform.tfvars     # keep default tfvars committed if needed
 
